@@ -3,6 +3,7 @@ import { Column } from './Column';
 import { DataType } from '../../types/database';
 import fs from 'fs/promises';
 import path from 'path';
+import { FileQueue } from '../storage/FileQueue';
 
 export class Database {
   private tables: Map<string, Table> = new Map();
@@ -10,11 +11,13 @@ export class Database {
   private dataDir: string;
   private dbFilePath: string;
   private isInitializing: boolean = false;
+  private fileQueue: FileQueue;
 
   constructor(name: string = 'default') {
     this.name = name;
     this.dataDir = path.join(process.cwd(), 'data');
     this.dbFilePath = path.join(this.dataDir, `${name}.json`);
+    this.fileQueue = new FileQueue();
     this.initializeStorage();
   }
 
@@ -56,9 +59,6 @@ export class Database {
   private restoreFromData(savedData: any): void {
     if (!savedData || !savedData.tables) return;
 
-    // Clear existing tables
-    this.tables.clear();
-
     savedData.tables.forEach((tableData: any) => {
       try {
         // Recreate columns
@@ -74,7 +74,6 @@ export class Database {
         );
 
         // Recreate table WITHOUT onChange callback during initialization
-        // We'll add the callback after we restore all data
         const table = new Table(
           tableData.name,
           columns,
@@ -107,13 +106,11 @@ export class Database {
 
   // Helper method to insert without triggering notify
   private insertWithoutNotify(table: Table, rowData: any): { success: boolean; errors?: string[] } {
-    // This is a simplified version that doesn't trigger onChange
     const validation = (table as any).validateRow(rowData);
     if (!validation.valid) {
       return { success: false, errors: validation.errors };
     }
 
-    // Create new row with serialized values
     const row: any = {};
     (table as any).columns.forEach((column: Column) => {
       const value = rowData[column.name] !== undefined ? 
@@ -122,7 +119,6 @@ export class Database {
       row[column.name] = value;
     });
 
-    // Insert row
     const rowIndex = (table as any).rows.length;
     (table as any).rows.push(row);
 
@@ -136,7 +132,7 @@ export class Database {
     return { success: true };
   }
 
-  // Save database to file
+  // Save database to file using queue (NON-BLOCKING)
   private async saveToFile(): Promise<void> {
     // Don't save if we're still initializing
     if (this.isInitializing) {
@@ -145,9 +141,10 @@ export class Database {
     
     try {
       const data = this.toJSON();
-      await fs.writeFile(this.dbFilePath, JSON.stringify(data, null, 2), 'utf-8');
+      // Add to queue and return immediately - don't wait for write to complete
+      this.fileQueue.enqueue(this.dbFilePath, data);
     } catch (error) {
-      console.error('❌ Error saving database to file:', error);
+      console.error('❌ Error preparing database for save:', error);
     }
   }
 
@@ -199,7 +196,7 @@ export class Database {
     
     this.tables.set(tableName, table);
     
-    // Save to file immediately
+    // Save to file immediately (non-blocking)
     this.saveToFile();
     
     return true;
@@ -249,7 +246,7 @@ export class Database {
       storage: {
         type: 'file',
         path: this.dbFilePath,
-        size: 'auto-saved'
+        queueLength: this.fileQueue.getQueueLength()
       }
     };
   }
@@ -263,19 +260,34 @@ export class Database {
         size: stats.size,
         created: stats.birthtime,
         modified: stats.mtime,
-        path: this.dbFilePath
+        path: this.dbFilePath,
+        queueLength: this.fileQueue.getQueueLength()
       };
     } catch {
       return {
         exists: false,
-        path: this.dbFilePath
+        path: this.dbFilePath,
+        queueLength: this.fileQueue.getQueueLength()
       };
     }
   }
 
   // Manual save (optional, for testing)
   async manualSave(): Promise<void> {
-    await this.saveToFile();
-    console.log('💾 Manual save completed');
+    try {
+      const data = this.toJSON();
+      await fs.writeFile(this.dbFilePath, JSON.stringify(data), 'utf-8');
+      console.log('💾 Manual save completed');
+    } catch (error) {
+      console.error('❌ Error saving database to file:', error);
+    }
+  }
+
+  // Get queue status
+  getQueueStatus(): any {
+    return {
+      queueLength: this.fileQueue.getQueueLength(),
+      isInitializing: this.isInitializing
+    };
   }
 }

@@ -5,6 +5,7 @@ export class Table {
   private rows: RowData[] = [];
   private indexes: Map<string, Map<any, number[]>> = new Map();
   private onChange?: () => void;
+  private pendingChanges: boolean = false;
 
   constructor(
     public name: string,
@@ -52,10 +53,21 @@ export class Table {
     }
   }
 
-  // Notify database of changes
+  // Notify database of changes (deferred)
   private notifyChange(): void {
     if (this.onChange) {
-      this.onChange();
+      // Mark that we have changes but don't trigger immediately
+      if (!this.pendingChanges) {
+        this.pendingChanges = true;
+        
+        // Use setTimeout to batch changes
+        setTimeout(() => {
+          if (this.pendingChanges) {
+            this.onChange!();
+            this.pendingChanges = false;
+          }
+        }, 100); // Batch changes within 100ms
+      }
     }
   }
 
@@ -83,13 +95,7 @@ export class Table {
       if (column.unique && value !== undefined && value !== null) {
         const existing = this.findByIndex(column.name, value);
         if (existing.length > 0) {
-          // Check if it's the same row (for updates)
-          const isSameRow = existing.every(row => 
-            Object.keys(data).some(key => data[key] !== row[key])
-          );
-          if (!isSameRow) {
-            errors.push(`Duplicate value for unique column '${column.name}': ${value}`);
-          }
+          errors.push(`Duplicate value for unique column '${column.name}': ${value}`);
         }
       }
     });
@@ -121,7 +127,7 @@ export class Table {
       }
     });
 
-    // Notify database to save
+    // Notify database to save (deferred)
     this.notifyChange();
 
     return { success: true, row: { ...row } };
