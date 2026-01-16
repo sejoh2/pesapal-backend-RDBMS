@@ -24,6 +24,7 @@ app.use((req, res, next) => {
 const corsOptions = {
   origin: [
     'https://pesapalrdbms.netlify.app',
+    'https://pesapal-frontend-rdbms-hzy9.vercel.app',
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:5173',
