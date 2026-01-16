@@ -20,26 +20,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Allowed origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:5173',
-  'https://pesapalrdbms.netlify.app', // your frontend deployed URL
-  'https://pesapal-rdbms-nr9b.onrender.com', // backend deployed URL (if needed)
-];
-
 // Configure CORS
 const corsOptions = {
-  origin: (origin: any, callback: any) => {
-    // Allow requests with no origin (like Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error(`CORS policy: Origin ${origin} not allowed`));
-    }
-  },
+  origin: [
+    'https://pesapalrdbms.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173',
+    'https://*.onrender.com'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: true,
