@@ -1,0 +1,28 @@
+# Node.js dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Optional npm cache
+.npm
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment variables
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files (VS Code)
+.vscode/
+.idea/
